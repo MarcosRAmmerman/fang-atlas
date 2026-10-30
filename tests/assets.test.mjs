@@ -1,0 +1,12 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import crypto from 'node:crypto';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {Box3,Vector3} from 'three';
+import {Exploder} from '../src/explode.js';
+const dir='public/models/hero/';const read=f=>JSON.parse(fs.readFileSync(dir+f));const manifest=read('manifest.json');const b=fs.readFileSync(dir+'model.glb');
+const {scene}=await new GLTFLoader().parseAsync(b.buffer.slice(b.byteOffset,b.byteOffset+b.byteLength),'');const nodes=new Map();scene.traverse(o=>{if(o.userData.componentId){assert(!nodes.has(o.userData.componentId));nodes.set(o.userData.componentId,o)}});scene.updateMatrixWorld(true);
+test('real geometry has valid bounds, triangles and source provenance',()=>{assert.equal(b.readUInt32LE(0),0x46546c67);assert.equal(b.readUInt32LE(8),b.length);let triangles=0;scene.traverse(o=>{if(o.isMesh){triangles+=(o.geometry.index?.count||o.geometry.attributes.position.count)/3;assert(o.geometry.attributes.position.count>0);}});assert.equal(triangles,manifest.stats.triangles);assert(triangles>100000);const size=new Box3().setFromObject(scene).getSize(new Vector3());assert(size.toArray().every(v=>v>0.5&&v<1));const source=read('source-report.json');const file=source.source;assert.equal(crypto.createHash('sha256').update(fs.readFileSync('CAD/'+file)).digest('hex'),source.sourceSha256);});
+test('annotations and lesson reference real assembly components',()=>{for(const a of read('annotations.json')){assert(nodes.has(a.componentId));assert.equal(a.anchor.length,3);assert(a.anchor.every(Number.isFinite));const world=nodes.get(a.componentId).localToWorld(new Vector3(...a.anchor));assert(new Box3().setFromObject(nodes.get(a.componentId)).expandByScalar(0.001).containsPoint(world));}for(const step of read('lesson.json').steps)if(step.componentId)assert(nodes.has(step.componentId));});
+test('explosion moves intact disjoint assemblies and exactly restores origins',()=>{const groups=manifest.explodeGroups.map(id=>nodes.get(id));assert(groups.every(Boolean));for(const a of groups)for(const b of groups)if(a!==b){for(let p=b.parent;p;p=p.parent)assert.notEqual(p,a);}const originals=groups.map(g=>g.position.clone());const explode=new Exploder(groups,scene);explode.target=1;explode.update(true);assert(groups.every((g,i)=>g.position.distanceTo(originals[i])>0.1));explode.target=0;explode.update(true);assert(groups.every((g,i)=>g.position.equals(originals[i])));});

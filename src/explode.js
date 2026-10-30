@@ -1,0 +1,6 @@
+import {Vector3,Box3,Quaternion} from 'three';
+export class Exploder {
+ constructor(groups,root,options={}){const box=new Box3().setFromObject(root),center=box.getCenter(new Vector3()),distance=box.getSize(new Vector3()).length()*(options.distanceFactor??0.28);this.items=groups.map(obj=>{const bounds=new Box3().setFromObject(obj),c=bounds.getCenter(new Vector3());let direction=options.directions?.[obj.userData.componentId]?new Vector3(...options.directions[obj.userData.componentId]):c.sub(center);if(direction.length()<0.01)direction.set(0,1,0);const worldDelta=direction.normalize().multiplyScalar(distance);const delta=worldDelta.clone().applyQuaternion(obj.parent.getWorldQuaternion(new Quaternion()).invert());return {obj,origin:obj.position.clone(),delta,worldDelta,bounds}});this.value=0;this.target=0;this.bounds=box;}
+ targetBounds(value){const box=this.bounds.clone();for(const item of this.items)box.union(item.bounds.clone().translate(item.worldDelta.clone().multiplyScalar(value)));return box;}
+ update(reduced){this.value=reduced||Math.abs(this.target-this.value)<0.00001?this.target:this.value+(this.target-this.value)*0.09;for(const {obj,origin,delta} of this.items)obj.position.copy(origin).addScaledVector(delta,this.value);}
+}

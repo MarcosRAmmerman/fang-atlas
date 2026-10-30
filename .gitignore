@@ -1,0 +1,16 @@
+node_modules/
+dist/
+CAD/
+*.log
+.local/
+test-results/
+playwright-report/
+CAD/
+.local/
+node_modules/
+dist/
+test-results/
+playwright-report/
+.env
+.env.*
+public/models/
